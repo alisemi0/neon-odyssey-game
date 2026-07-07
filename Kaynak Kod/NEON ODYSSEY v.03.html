@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NEON ODYSSEY: OVERDRIVE + COMBAT</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --c-cyan: #00f2ff; 
+            --c-pink: #ff007a; 
+            --c-gold: #ffd700; 
+            --c-shield: #4d94ff;
+            --c-bg: #050510; 
+        }
+        
+        body { margin: 0; background: var(--c-bg); overflow: hidden; font-family: 'Rajdhani', sans-serif; user-select: none; -webkit-tap-highlight-color: transparent; }
+        canvas { display: block; touch-action: none; }
+
+        /* CRT SCANLINE EFFECT */
+        body::after {
+            content: ""; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 2px, 3px 100%; pointer-events: none; z-index: 999;
+        }
+
+        /* UI KATMANLARI */
+        .screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; flex-direction: column; justify-content: center; align-items: center;
+            pointer-events: auto; z-index: 10; transition: opacity 0.3s;
+        }
+        
+        .active-screen { display: flex; }
+
+        /* OYUN İÇİ HUD */
+        #game-ui { display: none; pointer-events: none; justify-content: space-between; align-items: flex-start; padding: 20px; box-sizing: border-box; width: 100%; }
+        
+        .hud-group { display: flex; gap: 10px; }
+        .hud-box {
+            background: rgba(0,0,0,0.6); border: 1px solid var(--c-cyan);
+            padding: 5px 15px; color: #fff; transform: skewX(-15deg);
+            backdrop-filter: blur(4px); min-width: 60px; text-align: center;
+            box-shadow: 0 0 10px rgba(0, 242, 255, 0.1);
+        }
+        
+        #pause-btn {
+            pointer-events: auto; background: var(--c-pink); border: none;
+            width: 40px; height: 40px; font-weight: bold; color: white;
+            cursor: pointer; transform: skewX(-10deg); font-size: 20px;
+            box-shadow: 0 0 10px var(--c-pink);
+        }
+
+        #energy-bar-container {
+            position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%) skewX(-15deg);
+            width: 300px; height: 12px; border: 2px solid rgba(255,255,255,0.3); padding: 3px;
+            background: rgba(0,0,0,0.5);
+        }
+        #energy-fill { width: 0%; height: 100%; background: var(--c-pink); transition: width 0.1s linear; box-shadow: 0 0 15px var(--c-pink); position: relative; overflow: hidden; }
+        #energy-fill::after {
+            content:''; position: absolute; top:0; left:0; width:100%; height:100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.8), transparent);
+            transform: skewX(-20deg) translateX(-150%); animation: shine 2s infinite;
+        }
+        @keyframes shine { 100% { transform: skewX(-20deg) translateX(150%); } }
+
+        /* Kalkan Göstergesi */
+        #shield-indicator {
+            position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+            color: var(--c-shield); font-weight: bold; letter-spacing: 2px;
+            text-shadow: 0 0 10px var(--c-shield); opacity: 0; transition: opacity 0.3s;
+        }
+
+        /* MENÜ TASARIMLARI */
+        .panel {
+            background: rgba(10, 15, 25, 0.95); padding: 40px; border: 1px solid var(--c-cyan);
+            border-top: 4px solid var(--c-cyan); border-bottom: 4px solid var(--c-cyan);
+            text-align: center; box-shadow: 0 0 50px rgba(0, 242, 255, 0.15);
+            min-width: 300px; max-width: 400px; position: relative; color: white;
+            clip-path: polygon(0 10%, 10% 0, 90% 0, 100% 10%, 100% 90%, 90% 100%, 10% 100%, 0 90%);
+        }
+
+        h1 { margin: 0 0 5px; font-size: 3.5rem; color: #fff; text-shadow: 4px 4px 0px var(--c-pink); letter-spacing: 2px; line-height: 0.9; font-style: italic; }
+        h2 { font-size: 2rem; color: var(--c-cyan); text-transform: uppercase; margin-bottom: 30px; letter-spacing: 5px; }
+        
+        .btn {
+            background: transparent; border: 1px solid rgba(255,255,255,0.2); color: #fff;
+            padding: 15px 0; width: 100%; font-size: 1.2rem; font-weight: 700;
+            margin-top: 10px; cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+            font-family: 'Rajdhani', sans-serif; letter-spacing: 2px; position: relative; overflow: hidden;
+        }
+        .btn:hover { background: rgba(255,255,255,0.1); border-color: #fff; letter-spacing: 4px; }
+        .btn:active { transform: scale(0.98); }
+        
+        .btn.primary { background: var(--c-cyan); color: #000; border: none; box-shadow: 0 0 20px rgba(0, 242, 255, 0.4); }
+        .btn.primary:hover { background: #fff; box-shadow: 0 0 30px rgba(255, 255, 255, 0.6); }
+        
+        .btn.gold { border-color: var(--c-gold); color: var(--c-gold); }
+        .btn.gold:hover { background: var(--c-gold); color: #000; box-shadow: 0 0 20px var(--c-gold); }
+
+        /* SWITCH TOGGLES */
+        .setting-row { display: flex; justify-content: space-between; align-items: center; color: white; margin: 15px 0; font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 5px; }
+        .switch { width: 40px; height: 20px; background: #333; position: relative; cursor: pointer; border: 1px solid #555; skewX(-10deg); }
+        .switch.on { background: var(--c-cyan); border-color: var(--c-cyan); }
+        .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: white; transition: 0.2s; }
+        .switch.on::after { left: 22px; }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="c"></canvas>
+
+    <div id="game-ui" class="screen">
+        <div class="hud-group">
+            <div class="hud-box">
+                <div style="font-size: 10px; opacity:0.7; color:#ccc;">SKOR</div>
+                <div id="hud-score" style="font-size: 22px; font-weight:900;">0</div>
+            </div>
+            <div class="hud-box" style="border-color: var(--c-gold);">
+                <div style="font-size: 10px; opacity:0.7; color:#ccc;">SEVİYE</div>
+                <div id="hud-level" style="font-size: 22px; color: var(--c-gold); font-weight:900;">1</div>
+            </div>
+        </div>
+        <button id="pause-btn" onclick="Game.pauseGame()">II</button>
+        
+        <div id="shield-indicator">KALKAN AKTİF</div>
+        <div id="energy-bar-container"><div id="energy-fill"></div></div>
+    </div>
+
+    <div id="menu-main" class="screen active-screen">
+        <div class="panel">
+            <h1>NEON<br>ODYSSEY</h1>
+            <p style="color: var(--c-cyan); margin-bottom: 30px; letter-spacing: 6px; font-weight: bold;">OVERDRIVE</p>
+            
+            <button id="btn-continue" class="btn gold" style="display:none;" onclick="Game.start(true)">DEVAM ET</button>
+            <button class="btn primary" onclick="Game.start(false)">YENİ OYUN</button>
+            <button class="btn" onclick="UI.show('menu-settings')">AYARLAR</button>
+        </div>
+    </div>
+
+    <div id="menu-settings" class="screen">
+        <div class="panel">
+            <h2>AYARLAR</h2>
+            <div class="setting-row">
+                <span>Müzik & Ses</span>
+                <div class="switch on" id="sw-sfx" onclick="UI.toggle('sfx')"></div>
+            </div>
+            <div class="setting-row">
+                <span>Titreşim</span>
+                <div class="switch on" id="sw-vib" onclick="UI.toggle('vib')"></div>
+            </div>
+            <div class="setting-row">
+                <span>Efektler (GFX)</span>
+                <div class="switch on" id="sw-gfx" onclick="UI.toggle('gfx')"></div>
+            </div>
+            <button class="btn" onclick="UI.show('menu-main')">GERİ DÖN</button>
+        </div>
+    </div>
+
+    <div id="menu-pause" class="screen" style="background: rgba(0,0,0,0.85);">
+        <div class="panel">
+            <h2>DURAKLATILDI</h2>
+            <button class="btn primary" onclick="Game.resumeGame()">DEVAM ET</button>
+            <button class="btn" onclick="Game.quitGame()">ANA MENÜ</button>
+        </div>
+    </div>
+
+    <div id="menu-over" class="screen">
+        <div class="panel">
+            <h1 style="color: var(--c-pink); font-size: 3rem;">SİNYAL<br>KAYBI</h1>
+            <p style="margin: 20px 0; font-size: 1.2rem;">TOPLAM SKOR<br><span id="final-score" style="color: var(--c-cyan); font-size: 2.5rem; font-weight:900;">0</span></p>
+            <button class="btn primary" onclick="Game.start(false)">TEKRAR BAĞLAN</button>
+            <button class="btn" onclick="Game.quitGame()">ÇIKIŞ</button>
+        </div>
+    </div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+/* --- GELİŞMİŞ SES MOTORU --- */
+const AudioController = {
+    ctx: null,
+    masterGain: null,
+    isPlaying: false,
+    sequencerTimer: null,
+    noteIndex: 0,
+    melodyPattern: [ 65.41, 65.41, 0, 65.41, 77.78, 77.78, 0, 77.78, 87.31, 87.31, 0, 87.31, 58.27, 58.27, 0, 58.27 ],
+
+    init() {
+        if (!this.ctx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.gain.value = 0.35;
+            this.masterGain.connect(this.ctx.destination);
+        }
+        if(this.ctx.state === 'suspended') this.ctx.resume().catch(console.error);
+    },
+
+    startMusic() {
+        if(!UI.settings.sfx || this.isPlaying) return;
+        this.init();
+        this.isPlaying = true;
+        this.noteIndex = 0;
+        this.sequencerTimer = setInterval(() => {
+            const freq = this.melodyPattern[this.noteIndex % this.melodyPattern.length];
+            if(freq > 0) this.playSynthBass(freq);
+            this.noteIndex++;
+        }, 180);
+    },
+
+    stopMusic() {
+        if(this.sequencerTimer) clearInterval(this.sequencerTimer);
+        this.isPlaying = false;
+    },
+
+    playSynthBass(freq) {
+        if(!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.value = freq;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 5;
+        filter.frequency.value = 400;
+        filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.2);
+        const now = this.ctx.currentTime;
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start();
+        osc.stop(now + 0.3);
+    },
+
+    playSFX(type) {
+        if(!UI.settings.sfx || !this.ctx) return;
+        this.ctx.resume();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+
+        if(type === 'coin') {
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, now);
+            osc.frequency.linearRampToValueAtTime(2000, now + 0.1);
+            gain.gain.setValueAtTime(0.2, now);
+            gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+            osc.start(); osc.stop(now + 0.3);
+        } else if(type === 'shield') {
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(300, now);
+            osc.frequency.linearRampToValueAtTime(600, now + 0.4);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.4);
+            osc.start(); osc.stop(now + 0.4);
+        } else if(type === 'crash') {
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(100, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 0.4);
+            gain.gain.setValueAtTime(0.5, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+            osc.start(); osc.stop(now + 0.4);
+        } else if(type === 'break') {
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(200, now);
+            osc.frequency.linearRampToValueAtTime(50, now + 0.2);
+            gain.gain.setValueAtTime(0.4, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.2);
+            osc.start(); osc.stop(now + 0.2);
+        } else if(type === 'shoot') { /* YENİ: Ateş Sesi */
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+            osc.start(); osc.stop(now + 0.15);
+        }
+    }
+};
+
+/* --- KAYIT SİSTEMİ --- */
+const SaveSystem = {
+    key: 'NeonOdysseyOverdrive_v1',
+    save(level, score) {
+        const current = this.load();
+        if(level > current.level) {
+            localStorage.setItem(this.key, JSON.stringify({ level, score }));
+        }
+    },
+    load() {
+        const data = localStorage.getItem(this.key);
+        return data ? JSON.parse(data) : { level: 1, score: 0 };
+    }
+};
+
+/* --- UI YÖNETİMİ --- */
+const UI = {
+    settings: { vib: true, gfx: true, sfx: true },
+    init() {
+        const save = SaveSystem.load();
+        if(save.level > 1) {
+            const btn = document.getElementById('btn-continue');
+            btn.style.display = 'block';
+            btn.innerText = `DEVAM ET (LVL ${save.level})`;
+        }
+    },
+    show(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+        document.getElementById(id).classList.add('active-screen');
+        if(id === 'game-ui') document.getElementById('game-ui').style.display = 'flex';
+        else document.getElementById('game-ui').style.display = 'none';
+        if(id === 'menu-main') this.init();
+    },
+    toggle(key) {
+        this.settings[key] = !this.settings[key];
+        const sw = document.getElementById('sw-' + key);
+        this.settings[key] ? sw.classList.add('on') : sw.classList.remove('on');
+        if(key === 'sfx') {
+            if(this.settings.sfx && Game.state === 'PLAYING') AudioController.startMusic();
+            else AudioController.stopMusic();
+        }
+    },
+    updateHUD(score, level, energy, hyper, hasShield) {
+        document.getElementById('hud-score').innerText = Math.floor(score);
+        document.getElementById('hud-level').innerText = level;
+        const bar = document.getElementById('energy-fill');
+        bar.style.width = energy + "%";
+        bar.style.background = hyper ? 'var(--c-gold)' : 'var(--c-pink)';
+        bar.style.boxShadow = `0 0 ${hyper ? 25 : 10}px ${hyper ? 'var(--c-gold)' : 'var(--c-pink)'}`;
+        const shieldInd = document.getElementById('shield-indicator');
+        shieldInd.style.opacity = hasShield ? 1 : 0;
+    }
+};
+
+/* --- OYUN MOTORU --- */
+const Game = {
+    state: 'MENU',
+    score: 0, level: 1, speed: 8, energy: 0, hyper: false, hue: 180,
+    hasShield: false,
+    shake: 0,
+    player: { x: 0, targetX: 0, y: 0, w: 24, h: 30, tilt: 0 },
+    obstacles: [], items: [], fx: [], stars: [], floatingTexts: [], 
+    bullets: [], lastShot: 0, /* YENİ: Mermi dizisi ve zamanlayıcı */
+    gridOffset: 0,
+
+    init() {
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+        this.setupInput();
+        this.createStars();
+        UI.init();
+        this.loop();
+    },
+
+    resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        this.player.y = canvas.height * 0.82;
+        if(this.state !== 'PLAYING') this.player.x = this.player.targetX = canvas.width / 2;
+    },
+
+    setupInput() {
+        const input = (e) => {
+            if(this.state !== 'PLAYING') return;
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            this.player.targetX = Math.max(20, Math.min(canvas.width - 20, x));
+            if(AudioController.ctx && AudioController.ctx.state === 'suspended') AudioController.ctx.resume();
+        };
+        window.addEventListener('mousemove', input);
+        window.addEventListener('touchstart', input, {passive: false});
+        window.addEventListener('touchmove', input, {passive: false});
+        
+        /* YENİ: Tıklama ile Ateş Etme */
+        const triggerFire = () => { if(this.state === 'PLAYING') this.shoot(); };
+        window.addEventListener('mousedown', triggerFire);
+        window.addEventListener('touchstart', triggerFire, {passive: false});
+
+        window.addEventListener('click', () => {
+             if(AudioController.ctx && AudioController.ctx.state === 'suspended') AudioController.ctx.resume();
+        }, {once:true});
+    },
+
+    start(loadSave) {
+        this.state = 'PLAYING';
+        this.obstacles = []; this.items = []; this.fx = []; this.floatingTexts = []; this.bullets = [];
+        this.hyper = false; this.energy = 0; this.hasShield = false; this.shake = 0;
+        
+        if(loadSave) {
+            const save = SaveSystem.load();
+            this.level = save.level;
+            this.score = (this.level - 1) * 2000; 
+            this.speed = 8 * Math.pow(1.05, this.level - 1); 
+            this.hue = (180 + (this.level * 45)) % 360;
+        } else {
+            this.level = 1; this.score = 0; this.speed = 8; this.hue = 180;
+        }
+        
+        UI.show('game-ui');
+        this.player.x = this.player.targetX = canvas.width / 2;
+        this.addText("LEVEL " + this.level, canvas.width/2, canvas.height/2, '#fff', 60);
+        AudioController.startMusic();
+    },
+
+    /* YENİ: Ateş Etme Fonksiyonu */
+    shoot() {
+        const now = Date.now();
+        if(now - this.lastShot < 200) return; // Ateş hızı sınırı (ms)
+        this.lastShot = now;
+        
+        this.bullets.push({
+            x: this.player.x,
+            y: this.player.y - 20,
+            w: 4, h: 20,
+            c: this.hyper ? '#ffd700' : '#ff007a',
+            active: true
+        });
+        
+        AudioController.playSFX('shoot');
+    },
+
+    pauseGame() { 
+        if(this.state === 'PLAYING') { 
+            this.state = 'PAUSED'; 
+            UI.show('menu-pause'); 
+            AudioController.stopMusic();
+        } 
+    },
+    resumeGame() { 
+        this.state = 'PLAYING'; 
+        UI.show('game-ui'); 
+        AudioController.startMusic();
+    },
+    quitGame() { 
+        this.state = 'MENU'; 
+        UI.show('menu-main'); 
+        AudioController.stopMusic();
+    },
+
+    gameOver() {
+        this.state = 'GAMEOVER';
+        AudioController.stopMusic();
+        AudioController.playSFX('crash');
+        if(UI.settings.vib) navigator.vibrate?.([200, 100, 200]);
+        this.shake = 20;
+        document.getElementById('final-score').innerText = Math.floor(this.score);
+        this.createExplosion(this.player.x, this.player.y, '#00f2ff', 60);
+        SaveSystem.save(this.level, this.score);
+        setTimeout(() => UI.show('menu-over'), 1500);
+    },
+
+    spawnEntities() {
+        const lastObs = this.obstacles[this.obstacles.length-1];
+        if(!lastObs || lastObs.y > 280) { 
+            let gap = Math.max(120, 180 - (this.level * 5)); 
+            if(this.hyper) gap = 200;
+            const pos = Math.random() * (canvas.width - gap - 60) + 30;
+            const color = this.hyper ? '#444' : `hsl(${this.hue}, 100%, 60%)`;
+
+            this.obstacles.push({ x: 0, y: -50, w: pos, h: 30, c: color });
+            this.obstacles.push({ x: pos + gap, y: -50, w: canvas.width, h: 30, c: color });
+
+            const centerGap = pos + gap/2;
+            if(Math.random() < 0.35) {
+                const type = (Math.random() < 0.1 && !this.hasShield) ? 'shield' : 'coin';
+                this.items.push({ 
+                    x: centerGap, y: -50, type: type, active: true,
+                    size: type === 'shield' ? 14 : 10,
+                    color: type === 'shield' ? 'var(--c-shield)' : 'var(--c-gold)'
+                });
+            }
+        }
+    },
+
+    checkLevelUp() {
+        const newLevel = Math.floor(this.score / 2000) + 1;
+        if(newLevel > this.level) {
+            this.level = newLevel;
+            this.hue = (this.hue + 45) % 360;
+            this.speed *= 1.05;
+            this.addText("LEVEL " + this.level, this.player.x, this.player.y - 150, '#ffd700', 50);
+            SaveSystem.save(this.level, this.score);
+        }
+    },
+
+    createExplosion(x, y, color, count = 15) {
+        if(!UI.settings.gfx) return;
+        for(let i=0; i<count; i++) {
+            const speed = Math.random() * 8 + 2;
+            const angle = Math.random() * Math.PI * 2;
+            this.fx.push({
+                x, y, 
+                vx: Math.cos(angle) * speed, 
+                vy: Math.sin(angle) * speed, 
+                life: 1.0, c: color, type: 'particle'
+            });
+        }
+    },
+
+    addText(text, x, y, color, size) {
+        this.floatingTexts.push({ text, x, y, color, size, life: 60 });
+    },
+
+    update() {
+        if(this.state !== 'PLAYING' && this.state !== 'GAMEOVER') return;
+        if(this.shake > 0) this.shake *= 0.9;
+        if(this.shake < 0.5) this.shake = 0;
+
+        if(this.state === 'PLAYING') {
+            this.score += this.hyper ? 3 : 0.8;
+            this.gridOffset = (this.gridOffset + this.speed) % 100; 
+            this.checkLevelUp();
+
+            this.player.tilt = (this.player.targetX - this.player.x) * 0.15;
+            this.player.x += (this.player.targetX - this.player.x) * 0.2; 
+
+            if(UI.settings.gfx && Math.random() > 0.3) {
+                this.fx.push({
+                    x: this.player.x + (Math.random()-0.5)*10, y: this.player.y + 20,
+                    vx: (Math.random()-0.5)*2, vy: Math.random()*5+5, 
+                    life: 0.6, c: this.hyper ? 'var(--c-gold)' : 'var(--c-cyan)', type: 'trail'
+                });
+            }
+
+            if(this.energy >= 100 && !this.hyper) {
+                this.hyper = true; this.shake = 10;
+                this.createExplosion(this.player.x, this.player.y, '#ffd700', 40);
+                this.addText("OVERDRIVE!", canvas.width/2, canvas.height/3, '#ffd700', 40);
+            }
+            if(this.hyper) {
+                this.energy -= 0.4;
+                if(this.energy <= 0) { this.hyper = false; this.shake = 5; }
+            }
+
+            this.spawnEntities();
+            
+            /* YENİ: Mermi Güncelleme ve Çarpışma */
+            this.bullets.forEach((b, bi) => {
+                b.y -= 15;
+                if(b.y < -50) b.active = false;
+                
+                if(b.active) {
+                    this.obstacles.forEach((o, oi) => {
+                        // Basit AABB çarpışma kontrolü
+                        if(b.x > o.x && b.x < o.x + o.w && b.y < o.y + o.h && b.y > o.y) {
+                            b.active = false; // Mermi yok olur
+                            this.obstacles.splice(oi, 1); // Engel yok olur
+                            this.score += 50;
+                            this.createExplosion(b.x, b.y, o.c, 10);
+                            this.addText("HIT", b.x, b.y, '#fff', 14);
+                            if(UI.settings.vib) navigator.vibrate(10);
+                        }
+                    });
+                }
+            });
+            // Aktif olmayan mermileri temizle
+            this.bullets = this.bullets.filter(b => b.active);
+
+            // OBSTACLES COLLISION & UPDATE
+            this.obstacles.forEach((o, i) => {
+                o.y += this.speed;
+                const hitX = this.player.x - this.player.w/2 < o.x + o.w && this.player.x + this.player.w/2 > o.x;
+                const hitY = this.player.y - this.player.h/2 < o.y + o.h && this.player.y + this.player.h/2 > o.y;
+                
+                if(hitX && hitY) {
+                    if(this.hyper) {
+                        this.createExplosion(this.player.x, o.y + 15, '#ffd700', 12);
+                        this.obstacles.splice(i, 1);
+                        this.score += 100; this.shake = 5;
+                        if(UI.settings.vib) navigator.vibrate(30);
+                    } else if(this.hasShield) {
+                        this.hasShield = false;
+                        this.createExplosion(this.player.x, this.player.y, 'var(--c-shield)', 20);
+                        this.obstacles.splice(i, 1); 
+                        this.shake = 15;
+                        this.addText("SHIELD BROKEN", this.player.x, this.player.y - 50, '#fff', 20);
+                        AudioController.playSFX('break');
+                        if(UI.settings.vib) navigator.vibrate(100);
+                    } else {
+                        this.gameOver();
+                    }
+                }
+                if(o.y > canvas.height) this.obstacles.splice(i, 1);
+            });
+
+            // ITEMS COLLISION & UPDATE
+            this.items.forEach((c, i) => {
+                c.y += this.speed;
+                const dist = Math.hypot(c.x - this.player.x, c.y - this.player.y);
+                if(dist < 35 && c.active) {
+                    c.active = false;
+                    this.items.splice(i, 1);
+                    if(c.type === 'coin') {
+                        this.score += 250;
+                        this.energy = Math.min(100, this.energy + 15);
+                        this.createExplosion(c.x, c.y, '#ffd700', 8);
+                        this.addText("+250", c.x, c.y, '#ffd700', 16);
+                        AudioController.playSFX('coin');
+                    } else if(c.type === 'shield') {
+                        this.hasShield = true;
+                        this.score += 500;
+                        this.createExplosion(c.x, c.y, 'var(--c-shield)', 15);
+                        this.addText("SHIELD UP", c.x, c.y, 'var(--c-shield)', 20);
+                        AudioController.playSFX('shield');
+                    }
+                }
+                if(c.y > canvas.height) this.items.splice(i, 1);
+            });
+
+            UI.updateHUD(this.score, this.level, this.energy, this.hyper, this.hasShield);
+        }
+
+        this.fx.forEach((f, i) => {
+            f.x += f.vx; f.y += f.vy; 
+            f.life -= f.type === 'trail' ? 0.05 : 0.03;
+            if(f.life <= 0) this.fx.splice(i, 1);
+        });
+        
+        this.floatingTexts.forEach((t, i) => {
+            t.y -= 2; t.life--;
+            if(t.life <= 0) this.floatingTexts.splice(i, 1);
+        });
+
+        this.stars.forEach(s => {
+            s.y += s.speed + (this.state==='PLAYING' ? this.speed * 0.2 : 0.5);
+            if(s.y > canvas.height) s.y = 0;
+        });
+    },
+
+    draw() {
+        const sx = (Math.random() - 0.5) * this.shake;
+        const sy = (Math.random() - 0.5) * this.shake;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+
+        const bgHue = this.hyper ? 30 : 230;
+        ctx.fillStyle = this.hyper ? '#1a1000' : '#050510';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        this.drawPseudo3DGrid();
+        
+        ctx.fillStyle = "#fff";
+        this.stars.forEach(s => {
+            ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+            ctx.fillRect(s.x, s.y, s.size, s.size);
+        });
+        ctx.globalAlpha = 1;
+
+        /* YENİ: Mermileri Çiz */
+        this.bullets.forEach(b => {
+            ctx.fillStyle = b.c;
+            if(UI.settings.gfx) { ctx.shadowBlur = 10; ctx.shadowColor = b.c; }
+            ctx.fillRect(b.x - b.w/2, b.y, b.w, b.h);
+            ctx.shadowBlur = 0;
+        });
+
+        this.obstacles.forEach(o => {
+            ctx.fillStyle = o.c; 
+            if(UI.settings.gfx) { ctx.shadowBlur = 10; ctx.shadowColor = o.c; }
+            ctx.fillRect(o.x, o.y, o.w, o.h);
+            ctx.fillStyle = 'rgba(0,0,0,0.4)';
+            ctx.fillRect(o.x, o.y + o.h, o.w, 15);
+            ctx.shadowBlur = 0;
+        });
+
+        this.items.forEach(c => {
+            ctx.save();
+            ctx.translate(c.x, c.y);
+            ctx.rotate(Date.now() / 200);
+            ctx.fillStyle = c.color;
+            ctx.shadowBlur = 15; ctx.shadowColor = c.color;
+            if(c.type === 'coin') { ctx.beginPath(); ctx.arc(0, 0, c.size, 0, Math.PI*2); ctx.fill(); } 
+            else { ctx.fillRect(-8, -8, 16, 16); }
+            ctx.restore();
+        });
+
+        if(UI.settings.gfx) {
+            this.fx.forEach(f => {
+                ctx.globalAlpha = f.life; 
+                ctx.fillStyle = f.c; 
+                ctx.fillRect(f.x, f.y, f.type==='trail'?3:5, f.type==='trail'?3:5);
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        if(this.state !== 'GAMEOVER') this.drawPlayer();
+
+        this.floatingTexts.forEach(t => {
+            ctx.fillStyle = t.color;
+            ctx.font = `900 ${t.size}px Rajdhani`;
+            ctx.textAlign = 'center';
+            ctx.shadowBlur = 10; ctx.shadowColor = t.color;
+            ctx.globalAlpha = t.life / 30;
+            ctx.fillText(t.text, t.x, t.y);
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+        });
+
+        ctx.restore();
+    },
+
+    drawPseudo3DGrid() {
+        ctx.strokeStyle = this.hyper ? 'rgba(255, 215, 0, 0.3)' : `hsla(${this.hue}, 100%, 50%, 0.3)`;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const centerX = canvas.width / 2;
+        const horizon = canvas.height * -0.2; 
+        for (let i = -canvas.width; i < canvas.width * 2; i += 100) {
+            ctx.moveTo(i, canvas.height);
+            const xProjected = centerX + (i - centerX) * 0.1;
+            ctx.lineTo(xProjected, horizon);
+        }
+        const offset = this.gridOffset % 100;
+        for(let i=0; i<20; i++) {
+            let y = canvas.height - Math.pow(i, 2.5) * 4 + offset * (i*0.1); 
+            if(y < 0) continue;
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+        }
+        ctx.stroke();
+    },
+
+    drawPlayer() {
+        ctx.save();
+        ctx.translate(this.player.x, this.player.y);
+        ctx.rotate(this.player.tilt * Math.PI / 180);
+        if(this.hasShield) {
+            ctx.beginPath();
+            ctx.strokeStyle = 'var(--c-shield)';
+            ctx.lineWidth = 2;
+            ctx.arc(0, 5, 35, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = 'rgba(77, 148, 255, 0.1)';
+            ctx.fill();
+        }
+        const mainColor = this.hyper ? '#ffd700' : '#fff';
+        const glowColor = this.hyper ? '#ff0000' : '#00f2ff';
+        ctx.fillStyle = this.hyper ? "#fff" : "var(--c-pink)";
+        ctx.beginPath(); ctx.moveTo(-8, 15); ctx.lineTo(8, 15); ctx.lineTo(0, 35 + Math.random()*10); ctx.fill();
+        if(UI.settings.gfx) { ctx.shadowBlur = 20; ctx.shadowColor = glowColor; }
+        ctx.fillStyle = mainColor;
+        ctx.beginPath(); ctx.moveTo(0, -25); ctx.lineTo(-20, 20); ctx.lineTo(20, 20); ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(-5, 5); ctx.lineTo(5, 5); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    },
+
+    createStars() {
+        this.stars = Array(50).fill().map(() => ({ 
+            x: Math.random()*canvas.width, 
+            y: Math.random()*canvas.height, 
+            size: Math.random() * 2,
+            speed: Math.random()*2+0.5 
+        }));
+    },
+
+    loop() {
+        this.update();
+        this.draw();
+        requestAnimationFrame(() => this.loop());
+    }
+};
+
+Game.init();
+</script>
+</body>
+</html>
